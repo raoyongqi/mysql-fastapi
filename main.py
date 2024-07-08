@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, text
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
 import pandas as pd
@@ -51,6 +51,10 @@ async def upload_excel(file: UploadFile = File(...), db: Session = Depends(get_d
         # 删除完全重复的行
         df.drop_duplicates(inplace=True)
 
+        # 格式化浮点数列，保留六位小数
+        for col in df.select_dtypes(include=['float']):
+            df[col] = df[col].round(6)
+
         # 动态创建SQLAlchemy模型
         metadata = MetaData()
         table_name = "uploaded_data"
@@ -62,7 +66,12 @@ async def upload_excel(file: UploadFile = File(...), db: Session = Depends(get_d
         # 动态创建表
         columns = [Column("id", Integer, primary_key=True, autoincrement=True)]
         for col in df.columns:
-            dtype = String(255) if df[col].dtype == 'object' else Integer
+            if df[col].dtype == 'object':
+                dtype = String(255)
+            elif df[col].dtype == 'float':
+                dtype = Float
+            else:
+                dtype = Integer
             columns.append(Column(col, dtype))
 
         table = Table(table_name, metadata, *columns)
